@@ -19,3 +19,22 @@ Editor automatizado de tarjetas (Cards) publicitarias para el sector automotriz.
 1. Clonar el repositorio:
    ```bash
    git clone [https://github.com/TU_USUARIO/TU_REPOSITORIO.git](https://github.com/TU_USUARIO/TU_REPOSITORIO.git)
+
+# AutoCard Promotion Editor
+
+## Goal
+A specialized tool designed to standardize and automate the creation of digital promotion cards for automotive catalogs (Jeep, RAM, Fiat).
+
+## Business Impact
+* **Consistency:** Ensured 100% brand alignment across all digital platforms.
+* **Speed:** Faster update cycles for seasonal promotions and pricing changes.
+* **Quality Control:** Automated the generation of HTML/CSS cards to prevent manual formatting errors.
+
+## Tech Stack
+* **HTML/CSS:** Custom card layouts for digital catalogs.
+* **Content Engineering:** Automated template filling for dynamic pricing.
+
+## Key Features
+* Interactive card editing for different vehicle brands.
+* Responsive design for mobile and desktop viewing.
+* Direct integration with digital sales platforms.
