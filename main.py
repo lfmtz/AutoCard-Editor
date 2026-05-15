@@ -1,4 +1,6 @@
+# pyrefly: ignore [missing-import]
 import streamlit as st
+# pyrefly: ignore [missing-import]
 from bs4 import BeautifulSoup, Comment
 import re
 
@@ -10,6 +12,8 @@ st.set_page_config(page_title="Editor Stellantis Pro", page_icon="🛻", layout=
 
 if "soup" not in st.session_state:
     st.session_state.soup = None
+if "editadas" not in st.session_state:
+    st.session_state.editadas = set()
 
 # 2. BANNER DE TÍTULO (Tu diseño)
 st.markdown("""
@@ -40,12 +44,20 @@ if st.session_state.soup:
     cards_html = get_cards()
     nombres_modelos = [c.find("h2").text.strip() for c in cards_html if c.find("h2")]
 
-    col_izq, col_der = st.columns([1, 1])
+    # Crear paneles horizontales con st.tabs
+    tab_edit, tab_move, tab_delete, tab_add = st.tabs([
+        "📝 Editar Información", 
+        "↕️ Acomodar", 
+        "🗑️ Eliminar", 
+        "➕ Añadir Unidad"
+    ])
 
-    # --- COLUMNA IZQUIERDA: EDICIÓN DE CONTENIDO ---
-    with col_izq:
+    with tab_edit:
         st.subheader("📝 Editar Unidades")
-        modelo_a_editar = st.selectbox("Selecciona vehículo:", nombres_modelos)
+        def format_vehiculo(nombre):
+            return f"✅ {nombre}" if nombre in st.session_state.editadas else nombre
+            
+        modelo_a_editar = st.selectbox("Selecciona vehículo:", nombres_modelos, format_func=format_vehiculo)
         
         card_target = None
         for card in cards_html:
@@ -54,28 +66,77 @@ if st.session_state.soup:
                 break
 
         if card_target:
-            with st.form("form_edicion", clear_on_submit=True):
+            # Extraer valores actuales
+            precio_actual = ""
+            tag_precio = card_target.find(class_='model-price')
+            if tag_precio:
+                precio_actual = tag_precio.text.replace("Desde $", "").strip()
+            
+            id_img_actual = ""
+            img_tag = card_target.find('img')
+            if img_tag and 'src' in img_tag.attrs:
+                match = re.search(r'/([^/]+)\.jpg(?:$|\?)', img_tag['src'])
+                if match:
+                    id_img_actual = match.group(1)
+            
+            promo_actual = ""
+            p_div = card_target.find(class_='promo-main')
+            if p_div:
+                promo_actual = p_div.text.strip()
+            
+            beneficios_actuales = ""
+            ul_b = card_target.find(class_='benefits-list')
+            if ul_b:
+                lis = ul_b.find_all('li')
+                beneficios_actuales = "\n".join([li.text.strip() for li in lis])
+            
+            # Datos de Inventario actuales
+            inv_mod_actual = "RAM 700 2025"
+            inv_col_actual = "Blanco"
+            inv_pre_actual = "340,000"
+            activar_inv_actual = False
+            
+            for comment in card_target.find_all(string=lambda text: isinstance(text, Comment)):
+                if "inventario-especial" in comment:
+                    activar_inv_actual = True
+                    inv_s = BeautifulSoup(comment, 'html.parser')
+                    det = inv_s.find(class_="inventario-detalle")
+                    if det: 
+                        partes = det.text.split("· Color:")
+                        if len(partes) == 2:
+                            inv_mod_actual = partes[0].strip()
+                            inv_col_actual = partes[1].strip()
+                        else:
+                            inv_mod_actual = det.text.strip()
+                    pre = inv_s.find(class_="inventario-precio")
+                    if pre:
+                        inv_pre_actual = pre.text.replace("$", "").strip()
+                    break
+
+            with st.form("form_edicion", clear_on_submit=False):
                 st.info(f"Modificando: **{modelo_a_editar}**")
                 p1, p2 = st.columns(2)
                 with p1:
-                    nuevo_precio = st.text_input("Precio Principal")
-                    nuevo_id_img = st.text_input("ID Cloudinary (Nombre)")
-                    activar_inv = st.checkbox("Activar Inventario Especial")
+                    nuevo_precio = st.text_input("Precio Principal", value=precio_actual)
+                    nuevo_id_img = st.text_input("ID Cloudinary (Nombre)", value=id_img_actual)
+                    activar_inv = st.checkbox("Activar Inventario Especial", value=activar_inv_actual)
                 with p2:
-                    nueva_promo = st.text_area("Promo (Negritas auto)")
-                    nuevos_ben = st.text_area("Beneficios (uno por línea)")
+                    nueva_promo = st.text_area("Promo (Negritas auto)", value=promo_actual)
+                    nuevos_ben = st.text_area("Beneficios (uno por línea)", value=beneficios_actuales)
                 
                 # Datos de Inventario
                 st.markdown("---")
-                inv_mod = st.text_input("Inv: Modelo/Año", "RAM 700 2025")
-                inv_col = st.text_input("Inv: Color", "Blanco")
-                inv_pre = st.text_input("Inv: Precio Contado", "340,000")
+                inv_mod = st.text_input("Inv: Modelo/Año", value=inv_mod_actual)
+                inv_col = st.text_input("Inv: Color", value=inv_col_actual)
+                inv_pre = st.text_input("Inv: Precio Contado", value=inv_pre_actual)
 
                 if st.form_submit_button(f"💾 Guardar {modelo_a_editar}"):
                     # Lógica de Actualización de Texto y Estilos
                     if nuevo_precio:
                         tag = card_target.find(class_='model-price')
-                        if tag: tag.string = f"Desde ${nuevo_precio}"
+                        if tag: 
+                            tag.clear()
+                            tag.append(BeautifulSoup(f'<strong style="font-size:1.25em;">Desde ${nuevo_precio}</strong>', 'html.parser'))
                     
                     if nuevo_id_img:
                         img = card_target.find('img')
@@ -119,22 +180,11 @@ if st.session_state.soup:
                                     pre.append(soup.new_tag("small"))
                                 comment.replace_with(inv_s)
                                 break
+                    st.session_state.editadas.add(modelo_a_editar)
                     st.success("Cambios guardados.")
                     st.rerun()
 
-    # --- COLUMNA DERECHA: GESTIÓN DE ESTRUCTURA ---
-    with col_der:
-        # AÑADIR
-        st.subheader("➕ Añadir Unidad")
-        with st.form("form_add"):
-            n_nombre = st.text_input("Nombre nueva card")
-            if st.form_submit_button("Agregar al final") and n_nombre:
-                nueva = BeautifulSoup(str(cards_html[0]), 'html.parser').find('article')
-                nueva.find('h2').string = n_nombre
-                soup.find(class_='grid-promos').append(nueva)
-                st.rerun()
-
-        # MOVER
+    with tab_move:
         st.subheader("↕️ Reordenar")
         m_modelo = st.selectbox("Mover esta card:", nombres_modelos, key="move_sel")
         m_pos = st.number_input("A la posición:", 1, len(nombres_modelos), value=1)
@@ -150,7 +200,7 @@ if st.session_state.soup:
             else: arts_restantes[idx].insert_before(target)
             st.rerun()
 
-        # ELIMINAR
+    with tab_delete:
         st.subheader("🗑️ Eliminar")
         e_modelo = st.selectbox("Eliminar:", nombres_modelos, key="del_sel")
         confirm = st.checkbox("Confirmar eliminación")
@@ -160,10 +210,21 @@ if st.session_state.soup:
                     c.decompose()
                     st.rerun()
 
+    with tab_add:
+        st.subheader("➕ Añadir Unidad")
+        with st.form("form_add"):
+            n_nombre = st.text_input("Nombre nueva card")
+            if st.form_submit_button("Agregar al final") and n_nombre:
+                nueva = BeautifulSoup(str(cards_html[0]), 'html.parser').find('article')
+                nueva.find('h2').string = n_nombre
+                soup.find(class_='grid-promos').append(nueva)
+                st.rerun()
+
     st.divider()
     # 5. DESCARGA
     html_final = soup.prettify(formatter="html")
     st.download_button("📥 DESCARGAR CATÁLOGO COMPLETO", html_final, "catalogo_final.html", "text/html", use_container_width=True)
     if st.button("♻️ Reiniciar Editor"):
         st.session_state.soup = None
+        st.session_state.editadas = set()
         st.rerun()
